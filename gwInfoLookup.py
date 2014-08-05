@@ -33,13 +33,21 @@ class gwInfoLookup():
                 f.close()
 
         self.gw_info['ip_address'] = ip_address
-    
+
     def create_price_order_server_logfiles_list(self, directory):
         filename_elements = ['_OrderServer_', '_PriceServer_']
         for logfile in os.listdir(directory):
-            if any(filename_element in logfile for filename_element in filename_elements):
-                logfile = directory + '\\' + logfile
-                self.price_order_server_logfiles.append(logfile)
+            if 'copy' not in logfile.lower():
+                if any(filename_element in logfile for filename_element in filename_elements):
+                    logfile = directory + '\\' + logfile
+                    self.price_order_server_logfiles.append(logfile)
+
+        if len(self.price_order_server_logfiles) == 0:
+            for logfile in os.listdir(directory):
+                if 'copy' not in logfile.lower():
+                    if '_PRICEPROXY_' in logfile:
+                        logfile = directory + '\\' + logfile
+                        self.price_order_server_logfiles.append(logfile)
     
         for price_order_server_logfile in self.price_order_server_logfiles:
             if 'Copy of' in price_order_server_logfile:
@@ -66,7 +74,8 @@ class gwInfoLookup():
                     startup_logfile = logfile
                     f = open(logfile, 'rU')
                     for line in f.readlines():
-                        if re.search('Starting up .*Server', line, re.I) != None:
+                        if re.search('Starting up .*Server', line, re.I) != None or \
+                        re.search('Starting .*PROXY', line, re.I) != None:
                             startup_logfile = logfile
                             break
                         else:
@@ -79,10 +88,13 @@ class gwInfoLookup():
         f = open(startup_logfile, 'rU')
         for line in f.readlines():
             if self.gw_info['version'] == None:
-                if re.search('Starting up .*Server', line, re.I) != None:
+                if re.search('Starting up .*Server', line, re.I) != None or \
+                re.search('Starting .*PROXY', line, re.I) != None:
                     try:
                         if 'PRICE SERVER' in line or 'ORDER SERVER' in line:
                             self.gw_info['version'] = (line.split(' '))[-4]
+                        if 'PRICE PROXY APPLICATION' in line:
+                            self.gw_info['version'] = (line.split(' '))[-1]
                         else:
                             self.gw_info['version'] = (line.split(' '))[-1].rstrip('.\n')
                         if self.gw_info['flavour_name'] == None:
@@ -95,6 +107,11 @@ class gwInfoLookup():
                                 self.gw_info['flavour_name'] = (line.split(' '))[-2].rstrip('OrderServer')
                             elif 'PriceServer' in line:
                                 self.gw_info['flavour_name'] = (line.split(' '))[-2].rstrip('PriceServer')
+                            elif 'PRICE PROXY APPLICATION' in line:
+                                flavor_name = startup_logfile.split('\\')[-1]
+                                flavor_name = flavor_name.split('_')[0]
+                                flavor_name = flavor_name + '_PRICEPROXY'
+                                self.gw_info['flavour_name'] = flavor_name
                             else:
                                 print 'ERROR: Unable to determine the Gateway Flavour Name!'
                     except:
@@ -113,7 +130,6 @@ class gwInfoLookup():
         self.get_ip_address(directory)
         self.create_price_order_server_logfiles_list(directory)
         try:
-            self.price_order_server_logfiles
             self.get_details(directory)
             return self.gw_info
         except:
