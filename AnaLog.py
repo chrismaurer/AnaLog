@@ -5,7 +5,7 @@ The meaningful error messages are compiled into a report and posted to the AnaLo
 '''
 
 __author__ = 'Chris Maurer (chris.maurer@tradingtechnologies.com)'
-__version__ = '2.0'
+__version__ = '2.1'
 
 import os
 import time
@@ -17,7 +17,6 @@ import getpass
 import re
 import smtplib
 from gwInfoLookup import gwInfoLookup 
-from LogFileUtils import isMessageInLogFile
 from logExceptions import logExceptions
 from Timestamp import getTimeStamp, getDateStamp, getSecSinceEpoch
 from htmlHandler import catalog_by_date
@@ -59,20 +58,13 @@ class AnaLog():
             os.mkdir(self.sourceLogPath)
 
     def get_user_logon_creds(self):
-        username = '10.31.60.183\Administrator'
-        password = '12345678'
-
-        netUseCmd = r'net use ' + self.log_results_dir + ' /user:' + username + ' ' + password
+        netUseCmd = r'net use \\10.31.60.183\c$ /user:10.31.60.183\Administrator 12345678'
         login_response = subprocess.Popen(netUseCmd, stdout=subprocess.PIPE).communicate()
-        if 'The command completed successfully' not in str(login_response):
-            password = None
-
-        if password != None:
+        if 'The command completed successfully' in str(login_response):
             return True
         else:
-            print '\nERROR! I WAS NOT ABLE TO LOGIN TO THE SERVER!\n'
             return False
-    
+
     def grabOriginalZipFiles(self):
         '''Get path to the original ZIP files and copy them to local PC'''
         filename = r'C:\temp\AnaLog.ini'
@@ -165,20 +157,28 @@ class AnaLog():
         print 'Moving files to %s' % (self.destDir)
         keyword = None
         for fileName in os.listdir(self.logDir):
+            currentLogfile = None
             for keyword in logsToCopy:
-                if keyword in fileName:
-                    if 'Copy of' not in fileName:
-                        if str(time.localtime().tm_year) in fileName:
-                            fileDate = str(fileName.split('_')[-1]).split('.')[-2]
-                            fileEpochTime = getSecSinceEpoch(fileDate)
-                            if fileEpochTime >= (time.time() - (86400 * 10)):
-                                dateInRange = True
-                                currentLogfile = self.logDir + '\\' + fileName
-                        else: currentLogfile = self.logDir + '\\' + fileName
-                        try:
-                            shutil.move(currentLogfile, self.destDir)
-                        except:
-                            pass
+                if keyword in fileName and 'copy' not in fileName.lower():
+                    if str(time.localtime().tm_year) in fileName:
+                        fileDate = str(fileName.split('_')[-1]).split('.')[-2]
+                        fileEpochTime = getSecSinceEpoch(fileDate)
+                        if fileEpochTime >= (time.time() - (86400 * 10)):
+                            dateInRange = True
+                            currentLogfile = self.logDir + '\\' + fileName
+
+                        if currentLogfile != None:
+                            currentLogfileSize = os.path.getsize(currentLogfile)
+                            if currentLogfileSize > 2000000000:
+                                currentLogfileSize_list = list(str(currentLogfileSize / (1024**2)))
+                                print 'WARNING! The size of %s is %s.%s GB! AnaLog will skip this file.' % (fileName,
+                                                                                                            currentLogfileSize_list[0],
+                                                                                                            ''.join(currentLogfileSize_list[1:]))
+                            else:
+                                try:
+                                    shutil.move(currentLogfile, self.destDir)
+                                except:
+                                    pass
 
         print 'Moving Zip to %s' % (self.destDir)
         try:
@@ -230,26 +230,23 @@ class AnaLog():
             if '.mdmp' in fileName:
                 if str(time.localtime().tm_year) in fileName:
                     fileDate = str(fileName.split('_')[-1]).rstrip('.mdmp')
-                    fileDateList = list(fileDate.split('-'))
-                    fileDatePrintFormat = '/'.join([fileDateList[1],fileDateList[2],fileDateList[0]])
                     fileEpochTime = getSecSinceEpoch(fileDate)
                     if fileEpochTime >= (time.time() - (86400 * 10)):
-                        if self.is_not_user_requested_callstack(directory, fileName, fileDatePrintFormat):
-                            miniDumpFiles.append(fileName)
-                            miniDumpCount += 1
-                            crashServ = fileName.split('server')[0]
-                            crashDate = fileName.split('_')[-1].rstrip('.mdmp')
-                            for rptLog in os.listdir(directory):
-                                if '_rpt.log' in rptLog:
-                                    if crashServ in rptLog:
-                                        miniDumpFiles.append(rptLog)
+                        miniDumpFiles.append(fileName)
+                        miniDumpCount += 1
+                        crashServ = fileName.split('server')[0]
+                        crashDate = fileName.split('_')[-1].rstrip('.mdmp')
+                        for rptLog in os.listdir(directory):
+                            if '_rpt.log' in rptLog:
+                                if crashServ in rptLog:
+                                    miniDumpFiles.append(rptLog)
+                                    break
+                        for serverLog in os.listdir(directory):
+                            if 'Server_' in serverLog:
+                                if crashServ in serverLog:
+                                    if crashDate in serverLog:
+                                        miniDumpFiles.append(serverLog)
                                         break
-                            for serverLog in os.listdir(directory):
-                                if 'Server_' in serverLog:
-                                    if crashServ in serverLog:
-                                        if crashDate in serverLog:
-                                            miniDumpFiles.append(serverLog)
-                                            break
         return miniDumpCount, miniDumpFiles
 
     def is_not_user_requested_callstack(self, directory, fileName, fileDatePrintFormat):
@@ -296,11 +293,8 @@ class AnaLog():
             self.allErrorsList.append('<hr>\n')
 
         logfile_counter = 0
-        warnings = 0
-        errors = 0
-        criticals = 0
         listOfExceptions = logExceptions(self.gwFlavour)
-        severityList = ['WARNING', 'ERROR', 'CRITICAL', 'INFO']
+        severityList = ['WARNING', 'ERROR', 'CRITICAL']
         log_id_match_pattern = re.compile('[1-2][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')
         log = self.listOfLogs()
 
@@ -321,7 +315,7 @@ class AnaLog():
             warnings = 0
             errors = 0
             criticals = 0
-            log_id = None
+            log_id_zero = 0
 
             if currentLogfile != None:
                 if '.mdmp' in currentLogfile: pass
@@ -334,23 +328,39 @@ class AnaLog():
                                    logfilename + '">' + \
                                    'Click Here to view the full logfile</a>\n'
                     print 'Currently analising %s' % (currentLogfile.split('\\')[-1])
-                    for severity in severityList:
-                        logfileErrors = isMessageInLogFile(fullLogPath, severity, None, listOfExceptions)
-                        for logfileError in logfileErrors:
-                            if '| 00000000 |' in logfileError:
-                                logfileError = '<font color=\"red\">' + logfileError + '</font>'
-                                tmpList.append(logfileError + '<br>')
-                            if severity == severityList[0]:
-                                warnings += 1
-                                tmpList.append(logfileError + '<br>')
-                            elif severity == severityList[1]:
-                                errors += 1
-                                tmpList.append(logfileError + '<br>')
-                            elif severity == severityList[2]:
-                                criticals += 1
-                                tmpList.append(logfileError + '<br>')
-                            
-                            for log_entry_element in logfileError.split('|'):
+                    logfile_being_checked = file(fullLogPath, 'r')
+                    for logfile_entry in logfile_being_checked.readlines():
+                        log_id = None
+                        append = False
+                        exception_match = False
+
+                        for exception in listOfExceptions:
+                            if exception.match(logfile_entry) != None:
+                                exception_match = True
+
+                        if not exception_match:
+                            for severity in severityList:
+                                if ''.join(['| ', severity, ' |']) in logfile_entry:
+                                    if severityList.index(severity) == 0:
+                                        warnings += 1
+                                        append = True
+                                    if severityList.index(severity) == 1:
+                                        errors += 1
+                                        append = True
+                                    if severityList.index(severity) == 2:
+                                        criticals += 1
+                                        append = True
+
+                        if '| 00000000 |' in logfile_entry:
+                            logfile_entry = '<font color=\"red\">' + logfile_entry + '</font>'
+                            log_id_zero +=1 
+                            append = True
+
+                        if append:
+                            tmpList.append(logfile_entry + '<br>')
+
+                        if not exception_match:
+                            for log_entry_element in logfile_entry.split('|'):
                                 log_entry_element = log_entry_element.strip()
                                 if log_id_match_pattern.match(log_entry_element):
                                     log_id = log_entry_element
@@ -361,13 +371,14 @@ class AnaLog():
                                 log_id_full_list.append(log_id)
 
                     # create severity counts list
-                    if warnings + errors + criticals > 0:
+                    if warnings + errors + criticals + log_id_zero > 0:
                         if warnings > 0: log_severity_counts.append('%ss : %d' % (severityList[0], warnings))
                         if errors > 0: log_severity_counts.append('%ss : %d' % (severityList[1], errors))
                         if criticals > 0: log_severity_counts.append('%ss : %d' % (severityList[2], criticals))
+                        if log_id_zero > 0: log_severity_counts.append('%ss : %d' % ('00000000', log_id_zero))
                         log_severity_list.append('<div style="color:maroon; font-weight:bold;">| ' + \
                                                   ' | '.join(log_severity_counts) + \
-                                                  ' |</div>\n<br>\n')
+                                                  ' |</div>\n')
 
                     # create log_alert_dict
                     for log_id in log_id_summary_list:
@@ -378,7 +389,7 @@ class AnaLog():
                     # create log_alert_list
                     if len(log_alert_dict) > 0:
                         log_alert_list.append('<div style="color:navy; font-weight:bold;">' + \
-                                              'WARNING! This logfile contains a large number of the following messages:' + \
+                                              '<br>WARNING! This logfile contains a large number of the following messages:' + \
                                               '</div>\n<div>\n')
                         for k, v in log_alert_dict.iteritems():
                             lci_url = '<a href=\"http://cmweb/lci/message/view/id/%s\">%s</a> ' % (k, k)
@@ -389,7 +400,7 @@ class AnaLog():
                     if len(tmpList) + len(log_alert_list) > 0:
                         logfile_number = ''.join(['logfile', str(logfile_counter)])
                         # append logfile name header - log contents will expand from here
-                        self.allErrorsList.append('<div id="' + logfile_number + '" ' + \
+                        self.allErrorsList.append('<br>&nbsp;<br><div id="' + logfile_number + '" ' + \
                                                   'style="color:blue; font-weight:bold; cursor:pointer;" ' + \
                                                   'onclick="Expand(this.id);" ' + \
                                                   'onmouseover="this.style.color = "cyan";" ' + \
@@ -406,6 +417,7 @@ class AnaLog():
                                                   '<p>' + logfile_link + '</p>' + \
                                                   '\n<div>\n')
                         self.allErrorsList.extend(tmpList)
+                        self.allErrorsList.append('<hr>\n')
                         self.allErrorsList.append('</div></div></div>\n\n')
 
 #                if len(self.allErrorsList) == 0:
@@ -433,7 +445,7 @@ class AnaLog():
         formatted_reportFile = ((reportFile.lstrip(self.cwd)).replace('_', ' ')).replace('.html', '')
         f = file(self.today_file, 'a')
         f.write('<h3 style="font-family: Arial; text-align:center;"><a href=\"' + \
-                reportFile.replace(self.cwd, 'http://10.31.60.183:8080/') + '\">' + \
+                reportFile.replace(self.cwd + '\\', 'http://10.31.60.183:8080/') + '\">' + \
                 formatted_reportFile + '</a></h3>\n')
         f.close()
         
@@ -506,8 +518,8 @@ class AnaLog():
 
     def runAnaLog(self):
         zipFileCount = 1
-        self.setUpClass()
         if self.get_user_logon_creds():
+            self.setUpClass()
             self.grabOriginalZipFiles()
             zipListCount = self.getLogZips()
             zip_list_generator = self.listOfZips()
@@ -527,6 +539,8 @@ class AnaLog():
                     zipFileCount += 1
             self.cleanUp()
             self.postToServer()
+        else:
+            print 'ERROR! It seems like I was unable to login to the server.'
 
 if __name__ == "__main__":
     AnaLog = AnaLog()

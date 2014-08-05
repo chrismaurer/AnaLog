@@ -125,6 +125,7 @@ def logExceptions(gwFlavour):
         re.compile( r'.*10012036.*', re.I ),\
         re.compile( r'.*10098022.*', re.I ),\
         re.compile( r'.*10012037.*', re.I ),\
+        re.compile( r'.*10012038.*', re.I ),\
         re.compile( r'.*10098012.*', re.I ),\
         # Product Download and onControlMode
         re.compile( r'.*10011233.*', re.I ),\
@@ -150,7 +151,9 @@ def logExceptions(gwFlavour):
         # Ignore INFO 10012213 "change clearing date"
         re.compile( r'.*10012213.*', re.I ),\
         # Ignore WARNING 10098037 "Price API: Unhandled TT CODE TT_PRODTBL_UPDATED"
-        re.compile( r'.*Price API: Unhandled TT CODE TT_PRODTBL_UPDATED.*', re.I )
+        re.compile( r'.*Price API: Unhandled TT CODE TT_PRODTBL_UPDATED.*', re.I ),\
+        # Ignore "Data lost on PGM stream"
+        re.compile( r'.*10118042 | Data lost on PGM stream.*', re.I )
         ] 
     if any(gwFlavourName in gwFlavour for gwFlavourName in ['SGX', 'TOCOM', 'OSE', 'HKEx']):
         logExceptions.extend(OMExceptions())
@@ -221,8 +224,12 @@ def OMExceptions():
         re.compile( r'.*missing market_info_series.*', re.I ),\
         # Ignore "cannot find comb code for series"
         re.compile( r'.*10011043.*', re.I ),\
-        #Ignore "10013044 | Could not find any products matching "NK225""
-        re.compile( r'.*Could not find any products matching \"NK225\".*', re.I )
+        # Ignore "10013044 | Could not find any products matching "NK225""
+        re.compile( r'.*Could not find any products matching \"NK225\".*', re.I ),\
+        # Ignore "[BI7] Error in IQ42 query" messages
+        re.compile( r'.*10013088.*', re.I ),\
+        # Ignore "Failed to handle login request due to it being an invalid connection" messages
+        re.compile( r'.*Failed to handle login request due to it being an invalid connection.*', re.I )
         ]
     return OMExceptions
 
