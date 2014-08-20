@@ -1,11 +1,10 @@
-'''TT Gateway Logfile Analiser
+# ~TT Gateway Logfile Analyser
 
-This script extracts TT Logfile Zips and analises them, removing all "background noise" from the files.
-The meaningful error messages are compiled into a report and posted to the AnaLog webserver.
-'''
+# ~This script extracts TT Logfile Zips and analyses them, removing all "background noise" from the files.
+# ~The meaningful error messages are compiled into a report and posted to the AnaLog web server.
 
 __author__ = 'Chris Maurer (chris.maurer@tradingtechnologies.com)'
-__version__ = '2.1'
+__version__ = '2.2'
 
 import os
 import time
@@ -17,7 +16,7 @@ import getpass
 import re
 import smtplib
 from gwInfoLookup import gwInfoLookup
-from logExceptions import logExceptions
+from logExceptions import logexceptions
 from Timestamp import getTimeStamp, getDateStamp, getSecSinceEpoch
 from htmlHandler import catalog_by_date
 
@@ -26,40 +25,41 @@ log = logging.getLogger(__name__)
 
 class AnaLog():
     def __init__(self):
-        self.allErrorsList = []
-        self.severitySummary = []
-        self.miniDumpFiles = []
-        self.zipList = []
-        self.logList = []
-        self.gwFlavour = None
-        self.gwIP = None
-        self.gwVersion = None
-        self.pfxEnabled = None
-        self.tokenEnabled = None
+        self.all_errors_list = []
+        self.severity_summary = []
+        self.minidump_files = []
+        self.zip_list = []
+        self.log_list = []
+        self.gw_flavour = None
+        self.gw_ip = None
+        self.gw_version = None
+        self.pfx_enabled = None
+        self.token_enabled = None
         self.cwd = r'C:\temp\logs'
-        self.tempDir = self.cwd + '\\tmp'
-        self.logDir = self.tempDir + '\\tt\logfiles'
-        self.inst_logDir = self.logDir + '\\install'
-        self.configDir = self.tempDir + '\\tt\config'
-        self.sourceLogPath = r'C:\temp\logtemp'
-        self.destDir = None
-        self.archiveDir = r'\\10.31.60.183\c$\log_archives' + '\\' + 'archive_' + getDateStamp() + '_' + getTimeStamp()
+        self.tempdir = self.cwd + '\\tmp'
+        self.logdir = self.tempdir + '\\tt\logfiles'
+        self.inst_logdir = self.logdir + '\\install'
+        self.configdir = self.tempdir + '\\tt\config'
+        self.source_log_path = r'C:\temp\logtemp'
+        self.destdir = None
+        self.archivedir = r'\\10.31.60.183\c$\log_archives' + '\\' + 'archive_' + getDateStamp() + '_' + getTimeStamp()
         self.log_results_dir = r'\\10.31.60.183\c$\AnaLog'
         self.hyperlink_path = r'file://///10.31.60.183/c$/log_archives/archive_' + \
                               getDateStamp() + '_' + getTimeStamp() + '/'
         self.today_file = catalog_by_date()
 
-    # @classmethod
     def setup_class(self):
-        # Create local directories of they don't already exist
+        """Create local directories of they don't already exist"""
         if not os.path.exists(r'c:\temp'):
             os.mkdir(r'c:\temp')
         if not os.path.exists(self.cwd):
             os.mkdir(self.cwd)
-        if not os.path.exists(self.sourceLogPath):
-            os.mkdir(self.sourceLogPath)
+        if not os.path.exists(self.source_log_path):
+            os.mkdir(self.source_log_path)
 
-    def get_user_logon_creds(self):
+    @staticmethod
+    def get_user_logon_creds():
+        """Login to the AnaLog Web Server"""
         netusecmd = r'net use \\10.31.60.183\c$ /user:10.31.60.183\Administrator 12345678'
         login_response = subprocess.Popen(netusecmd, stdout=subprocess.PIPE).communicate()
         if 'The command completed successfully' in str(login_response):
@@ -68,95 +68,96 @@ class AnaLog():
             return False
 
     def grab_original_zip_files(self):
-        # Get path to the original ZIP files and copy them to local PC
+        """Get path to the original ZIP files and copy them to local PC"""
         filename = r'C:\temp\AnaLog.ini'
-        originalZipFilePath = None
 
         while True:
-            try:
+            if os.path.exists(filename):
                 f = file(filename, 'r')
                 hist = f.readline()
                 f.close()
-            except:
-                pass
+            else:
                 hist = None
             get_zip_file_path = raw_input('Please enter the path of the Zip files to analise [%s] : ' % hist)
             if len(get_zip_file_path) > 0:
                 f = file(filename, 'w')
                 f.write(get_zip_file_path)
                 f.close()
-            originalZipFilePath = hist if len(get_zip_file_path) == 0 else get_zip_file_path
-            if originalZipFilePath == None:
+            original_zipfile_path = hist if len(get_zip_file_path) == 0 else get_zip_file_path
+            if original_zipfile_path is None:
                 print 'ERROR! Could not locate Original Zip Files!'
                 raw_input('Press ENTER to re-try.')
             else:
-                print 'Copying Zip files from %s...' % originalZipFilePath
-                for zipFile in os.listdir(originalZipFilePath):
+                print 'Copying Zip files from %s...' % original_zipfile_path
+                for zipFile in os.listdir(original_zipfile_path):
                     if '.zip' in zipFile:
-                        shutil.copy(originalZipFilePath + '\\' + zipFile, self.sourceLogPath)
+                        shutil.copy(original_zipfile_path + '\\' + zipFile, self.source_log_path)
                 break
 
     def get_log_zips(self):
-        for fileName in os.listdir(self.sourceLogPath):
+        """Check logfiles' source directory and get a list and count of zips to work from"""
+        for fileName in os.listdir(self.source_log_path):
             if '.zip' in fileName:
-                self.zipList.append(fileName)
-        zipfile_count = len(self.zipList)
+                self.zip_list.append(fileName)
+        zipfile_count = len(self.zip_list)
         if zipfile_count == 0:
             print 'ERROR! There are no logfile ZIPs in the specified directory!'
         return zipfile_count
 
     def list_of_zips(self):
-        # Pass file name of current logfile zip to be extracted.
-        for zipFileName in self.zipList:
-            zipfile = self.sourceLogPath + '\\' + zipFileName
-            yield zipfile
+        """Pass file name of current logfile zip to be extracted."""
+        for zipFileName in self.zip_list:
+            zip_file = self.source_log_path + '\\' + zipFileName
+            yield zip_file
 
     def log_unzip(self, current_zipfile):
+        """Decompress the zip files"""
         z = zipfile.ZipFile(current_zipfile)
         for folderName in os.listdir(self.cwd):
             if folderName == 'tmp':
                 print 'An old temp folder was found and is therefore being removed.'
                 shutil.rmtree(self.cwd + '\\' + folderName)
-        print 'Extracting Zip: %s' % (current_zipfile)
-        z.extractall(self.tempDir)
-        self.deltreeList = os.listdir(self.cwd)
+        print 'Extracting Zip: %s' % current_zipfile
+        z.extractall(self.tempdir)
 
     def move_install_logs(self):
-        for inst_log in os.listdir(self.inst_logDir):
-            shutil.move(self.inst_logDir + '\\' + inst_log, self.logDir)
+        """Move the installation logfiles in with the rest of the logs"""
+        for inst_log in os.listdir(self.inst_logdir):
+            shutil.move(self.inst_logdir + '\\' + inst_log, self.logdir)
 
     def get_logfile_info(self):
-        if os.path.exists(self.inst_logDir):
+        """Get IP Address, GW Flavour Name, GW Version, pfxEnabled bool and tokenEnabled bool"""
+        if os.path.exists(self.inst_logdir):
             self.move_install_logs()
         gw_info = gwInfoLookup()
-        gw_info_dict = gw_info.gw_info_lookup(self.logDir)
+        gw_info_dict = gw_info.gw_info_lookup(self.logdir)
 
-        self.gwIP = 'Unknown' if gw_info_dict['ip_address'] is None else gw_info_dict['ip_address']
-        self.gwFlavour = 'Unknown' if gw_info_dict['flavour_name'] is None else gw_info_dict['flavour_name']
-        self.gwVersion = 'Unknown' if gw_info_dict['version'] is None else gw_info_dict['version']
-        self.pfxEnabled = 'Unknown' if gw_info_dict['pfx_enabled'] is None else gw_info_dict['pfx_enabled']
-        self.tokenEnabled = 'Unknown' if gw_info_dict['token_enabled'] is None else gw_info_dict['token_enabled']
-        self.destDir = self.cwd + '\\' + self.gwFlavour + '_' + self.gwIP
+        self.gw_ip = 'Unknown' if gw_info_dict['ip_address'] is None else gw_info_dict['ip_address']
+        self.gw_flavour = 'Unknown' if gw_info_dict['flavour_name'] is None else gw_info_dict['flavour_name']
+        self.gw_version = 'Unknown' if gw_info_dict['version'] is None else gw_info_dict['version']
+        self.pfx_enabled = 'Unknown' if gw_info_dict['pfx_enabled'] is None else gw_info_dict['pfx_enabled']
+        self.token_enabled = 'Unknown' if gw_info_dict['token_enabled'] is None else gw_info_dict['token_enabled']
+        self.destdir = self.cwd + '\\' + self.gw_flavour + '_' + self.gw_ip
 
     def file_handler(self, current_zipfile):
-        # Create Destination Folder for current GW's logfiles,
-        # move temp files into it then remove temp directory.
+        """Create Destination Folder for current GW's logfiles,
 
+        move temp files into it then remove temp directory."""
         date_in_range = False
         logs_to_copy = ('TT_', '_OrderServer_', '_PriceServer_', '_FillServer_', '_OrderRouter',
                         'PRICEPROXY', 'ttmd_', 'AuditConvert_', '.mdmp', '_rpt', '.zip')
-        try:
-            print 'Creating new directory \"%s\".' % (self.gwFlavour + '_' + self.gwIP)
-            os.makedirs(self.destDir)
-        except:
+        if not os.path.exists(self.destdir):
+            print 'Creating new directory \"%s\".' % (self.gw_flavour + '_' + self.gw_ip)
+            os.makedirs(self.destdir)
+        else:
             for folderName in os.listdir(self.cwd):
-                if folderName == self.gwFlavour + '_' + self.gwIP:
+                if folderName == self.gw_flavour + '_' + self.gw_ip:
                     print 'Destination Folder already exists and is therefore being removed.'
                     shutil.rmtree(self.cwd + '\\' + folderName)
-                    os.makedirs(self.destDir)
+                    os.makedirs(self.destdir)
 
-        print 'Moving files to %s' % self.destDir
-        for fileName in os.listdir(self.logDir):
+        print 'Moving files to %s' % self.destdir
+        for fileName in os.listdir(self.logdir):
             current_logfile = None
             for keyword in logs_to_copy:
                 if keyword in fileName and 'copy' not in fileName.lower():
@@ -165,7 +166,7 @@ class AnaLog():
                         file_epoch_time = getSecSinceEpoch(filedate)
                         if file_epoch_time >= (time.time() - (86400 * 10)):
                             date_in_range = True
-                            current_logfile = self.logDir + '\\' + fileName
+                            current_logfile = self.logdir + '\\' + fileName
 
                         if current_logfile is not None:
                             current_logfile_size = os.path.getsize(current_logfile)
@@ -175,14 +176,14 @@ class AnaLog():
                                       (fileName, current_logfile_size_list[0], ''.join(current_logfile_size_list[1:]))
                             else:
                                 try:
-                                    shutil.move(current_logfile, self.destDir)
-                                except:
+                                    shutil.move(current_logfile, self.destdir)
+                                except IOError:
                                     pass
 
-        print 'Moving Zip to %s' % self.destDir
+        print 'Moving Zip to %s' % self.destdir
         try:
-            shutil.move(current_zipfile, self.destDir)
-        except:
+            shutil.move(current_zipfile, self.destdir)
+        except IOError:
             print 'ERROR! Unable to backup Zip file'
 
         print 'Removing temporary files...'
@@ -190,40 +191,44 @@ class AnaLog():
             pass
         else:
             print 'ERROR! There are no logfiles within the required date range'
-        shutil.rmtree(self.tempDir)
+        shutil.rmtree(self.tempdir)
 
     def init_errors_list(self):
-        # Initialise allErrorsList and create HTML file header and doc heading.
-        self.allErrorsList = []
-        gwversion, pfxenabled, tokenenabled = self.gwVersion, self.pfxEnabled, self.tokenEnabled
+        """Initialise allErrorsList and create HTML file header and doc heading."""
+        self.all_errors_list = []
+        gwversion, pfxenabled, tokenenabled = self.gw_version, self.pfx_enabled, self.token_enabled
         if gwversion is None:
             gwversion = "Unknown"
         if pfxenabled is None:
             pfxenabled = "Unknown"
         if tokenenabled is None:
             tokenenabled = "Unknown"
-        self.allErrorsList.append('<script type="text/javascript">\n' +
-                                  'function Expand(id)\n' +
-                                  '{var div = document.getElementById(\'detail\' + id);\n' +
-                                  'if (div.style.display == \'\')\n'
-                                  '     div.style.display = \'none\';\n' +
-                                  'else if (div.style.display == \'none\')\n' +
-                                  '     div.style.display = \'\';}\n' +
-                                  '</script>\n')
-        self.allErrorsList.append('<html><body><font size=-1>\n\n')
-        self.allErrorsList.append('<h1><a href=\"' + self.hyperlink_path +
-                                  self.gwFlavour + '_' + self.gwIP +
-                                  '/\" title="Click here for the original logfiles">' +
-                                  '_'.join([self.gwFlavour, self.gwIP, gwversion]) + '</a></h1>\n')
-        self.allErrorsList.append('<h3><font color=\"green\">')
+        self.all_errors_list.append('<script type="text/javascript">\n' +
+                                    'function Expand(id)\n' +
+                                    '{var div = document.getElementById(\'detail\' + id);\n' +
+                                    'if (div.style.display == \'\')\n' +
+                                    '     div.style.display = \'none\';\n' +
+                                    'else if (div.style.display == \'none\')\n' +
+                                    '     div.style.display = \'\';}\n' +
+                                    '</script>\n')
+        self.all_errors_list.append('<html><body><font size=-1>\n\n')
+        self.all_errors_list.append('<h1><a href=\"' + self.hyperlink_path +
+                                    self.gw_flavour + '_' + self.gw_ip +
+                                    '/\" title="Click here for the original logfiles">' +
+                                    '_'.join([self.gw_flavour, self.gw_ip, gwversion]) + '</a></h1>\n')
+        self.all_errors_list.append('<h3><font color=\"green\">')
         if pfxenabled is not None:
-            self.allErrorsList.append('| PFXEnabled = %s |' % pfxenabled)
+            self.all_errors_list.append('| PFXEnabled = %s |' % pfxenabled)
         if tokenenabled is not None:
-            self.allErrorsList.append('| TokenEnabled = %s | ' % tokenenabled)
-        self.allErrorsList.append('</font></h3>\n')
+            self.all_errors_list.append('| TokenEnabled = %s | ' % tokenenabled)
+        self.all_errors_list.append('</font></h3>\n')
 
-    def minidump_handler(self, directory):
-        # Count minidump files with recent timestamps
+    @staticmethod
+    def minidump_handler(directory):
+        """Count minidump files with recent timestamps
+
+        :param directory:
+        """
         minidumpfiles = []
         minidumpcount = 0
         for fileName in os.listdir(directory):
@@ -249,7 +254,16 @@ class AnaLog():
                                         break
         return minidumpcount, minidumpfiles
 
-    def is_not_user_requested_callstack(self, directory, filename, filedate_print_format):
+    @staticmethod
+    def is_not_user_requested_callstack(directory, filename, filedate_print_format):
+        """
+        Helper function to help actual minidumps to be differentiated from user requested call stacks
+
+        :param directory:
+        :param filename:
+        :param filedate_print_format:
+        :return:
+        """
         log_entry_from_today = False
         minidumplog = file(directory + '\\' + filename, 'r')
         for line in minidumplog.readline():
@@ -261,50 +275,50 @@ class AnaLog():
         return False
 
     def get_minidump_data(self):
-        minidumpcount, minidumpfiles = self.minidump_handler(self.destDir)
+        minidumpcount, minidumpfiles = self.minidump_handler(self.destdir)
         if minidumpcount > 0:
-            self.allErrorsList.append('<font color=\"magenta\">| MINIDUMPs: %s |</font>\n' % (str(minidumpcount)))
-        self.miniDumpFiles = minidumpfiles
+            self.all_errors_list.append('<font color=\"magenta\">| MINIDUMPs: %s |</font>\n' % (str(minidumpcount)))
+        self.minidump_files = minidumpfiles
 
     def get_logfiles(self):
-        self.logList = os.listdir(self.destDir)
-        self.logList.sort(reverse=True)
+        self.log_list = os.listdir(self.destdir)
+        self.log_list.sort(reverse=True)
 
     def list_of_logs(self):
-        # Pass file name of current logfile to be analysed.
-        for logFile in self.logList:
+        """Pass file name of current logfile to be analysed."""
+        for logFile in self.log_list:
             yield logFile
 
     def check_logfile(self):
-        # Get list of known log messages to be omitted from search results.
-        # Write log message severity counts for current GW to report file
-        # Write to temporary report list any log entries that met search criteria
-        # Create link to original, unfiltered logfile
-        # Compile Summary of severities and write to report
-        # Write to report list all log entries from the temporary report list.
+        """Get list of known log messages to be omitted from search results.
 
-        if len(self.miniDumpFiles) > 0:
-            for miniDumpFile in self.miniDumpFiles:
-                self.allErrorsList.append('<br><a href=\"' + self.hyperlink_path +
-                                          self.gwFlavour + '_' + self.gwIP + '/' +
-                                          miniDumpFile + '\">' +
-                                          miniDumpFile + '</a>\n')
-            self.allErrorsList.append('<hr>\n')
+        Write log message severity counts for current GW to report file
+        Write to temporary report list any log entries that met search criteria
+        Create link to original, unfiltered logfile
+        Compile Summary of severities and write to report
+        Write to report list all log entries from the temporary report list."""
+
+        if len(self.minidump_files) > 0:
+            for minidump_file in self.minidump_files:
+                self.all_errors_list.append('<br><a href=\"' + self.hyperlink_path +
+                                            self.gw_flavour + '_' + self.gw_ip + '/' +
+                                            minidump_file + '\">' +
+                                            minidump_file + '</a>\n')
+            self.all_errors_list.append('<hr>\n')
 
         logfile_counter = 0
-        listofexceptions = logExceptions(self.gwFlavour)
+        listofexceptions = logexceptions(self.gw_flavour)
         severitylist = ['WARNING', 'ERROR', 'CRITICAL']
         log_id_match_pattern = re.compile('[1-2][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')
-        log = self.list_of_logs()
+        logfile_list_generator = self.list_of_logs()
 
         while True:
             try:
-                currentlogfile = log.next()
-            except:
-                currentlogfile = None
+                current_logfile = logfile_list_generator.next()
+            except StopIteration:
                 break
 
-            tmpList = []
+            tmplist = []
             log_id_summary_list = []
             log_id_full_list = []
             log_alert_dict = {}
@@ -316,27 +330,27 @@ class AnaLog():
             criticals = 0
             log_id_zero = 0
 
-            if currentlogfile is not None:
-                if '.mdmp' in currentlogfile:
+            if current_logfile is not None:
+                if '.mdmp' in current_logfile:
                     pass
-                elif '.zip' in currentlogfile:
+                elif '.zip' in current_logfile:
                     pass
                 else:
-                    fullLogPath = self.destDir + '\\' + currentlogfile
-                    logfilename = '_'.join(currentlogfile.split('\\')[-2:])
+                    full_log_path = self.destdir + '\\' + current_logfile
+                    logfilename = '_'.join(current_logfile.split('\\')[-2:])
                     logfile_link = '<a href=\"' + self.hyperlink_path + \
-                                   self.gwFlavour + '_' + self.gwIP + '/' + \
+                                   self.gw_flavour + '_' + self.gw_ip + '/' + \
                                    logfilename + '">' + \
                                    'Click Here to view the full logfile</a>\n'
-                    print 'Currently analising %s' % (currentlogfile.split('\\')[-1])
-                    logfile_being_checked = file(fullLogPath, 'r')
+                    print 'Currently analising %s' % (current_logfile.split('\\')[-1])
+                    logfile_being_checked = file(full_log_path, 'r')
                     for logfile_entry in logfile_being_checked.readlines():
                         log_id = None
                         append = False
                         exception_match = False
 
                         for exception in listofexceptions:
-                            if exception.match(logfile_entry) != None:
+                            if exception.match(logfile_entry) is not None:
                                 exception_match = True
 
                         if not exception_match:
@@ -358,7 +372,7 @@ class AnaLog():
                             append = True
 
                         if append:
-                            tmpList.append(logfile_entry + '<br>')
+                            tmplist.append(logfile_entry + '<br>')
 
                         if not exception_match:
                             for log_entry_element in logfile_entry.split('|'):
@@ -366,19 +380,23 @@ class AnaLog():
                                 if log_id_match_pattern.match(log_entry_element):
                                     log_id = log_entry_element
 
-                            if log_id != None:
+                            if log_id is not None:
                                 if log_id not in log_id_summary_list:
                                     log_id_summary_list.append(log_id)
                                 log_id_full_list.append(log_id)
 
                     # create severity counts list
                     if warnings + errors + criticals + log_id_zero > 0:
-                        if warnings > 0: log_severity_counts.append('%ss : %d' % (severitylist[0], warnings))
-                        if errors > 0: log_severity_counts.append('%ss : %d' % (severitylist[1], errors))
-                        if criticals > 0: log_severity_counts.append('%ss : %d' % (severitylist[2], criticals))
-                        if log_id_zero > 0: log_severity_counts.append('%ss : %d' % ('00000000', log_id_zero))
-                        log_severity_list.append('<div style="color:maroon; font-weight:bold;">| ' + \
-                                                 ' | '.join(log_severity_counts) + \
+                        if warnings > 0:
+                            log_severity_counts.append('%ss : %d' % (severitylist[0], warnings))
+                        if errors > 0:
+                            log_severity_counts.append('%ss : %d' % (severitylist[1], errors))
+                        if criticals > 0:
+                            log_severity_counts.append('%ss : %d' % (severitylist[2], criticals))
+                        if log_id_zero > 0:
+                            log_severity_counts.append('%ss : %d' % ('00000000', log_id_zero))
+                        log_severity_list.append('<div style="color:maroon; font-weight:bold;">| ' +
+                                                 ' | '.join(log_severity_counts) +
                                                  ' |</div>\n')
 
                     # create log_alert_dict
@@ -390,7 +408,7 @@ class AnaLog():
                     # create log_alert_list
                     if len(log_alert_dict) > 0:
                         log_alert_list.append('<div style="color:navy; font-weight:bold;">' +
-                                              '<br>WARNING! This logfile contains a large number + '
+                                              '<br>WARNING! This logfile contains a large number ' +
                                               'of the following messages:' +
                                               '</div>\n<div>\n')
                         for k, v in log_alert_dict.iteritems():
@@ -399,86 +417,82 @@ class AnaLog():
                             log_alert_list.append(alert_string)
                         log_alert_list.append('</div>\n')
 
-                    if len(tmpList) + len(log_alert_list) > 0:
+                    if len(tmplist) + len(log_alert_list) > 0:
                         logfile_number = ''.join(['logfile', str(logfile_counter)])
                         # append logfile name header - log contents will expand from here
-                        self.allErrorsList.append('<br>&nbsp;<br><div id="' + logfile_number + '" ' +
-                                                  'style="color:blue; font-weight:bold; cursor:pointer;" ' +
-                                                  'onclick="Expand(this.id);" ' +
-                                                  'onmouseover="this.style.color = "cyan";" ' +
-                                                  'onmouseout="this.style.color = "blue";">' +
-                                                  logfilename +
-                                                  '</div>\n<br>\n')
+                        self.all_errors_list.append('<br>&nbsp;<br><div id="' + logfile_number + '" ' +
+                                                    'style="color:blue; font-weight:bold; cursor:pointer;" ' +
+                                                    'onclick="Expand(this.id);" ' +
+                                                    'onmouseover="this.style.color = "cyan";" ' +
+                                                    'onmouseout="this.style.color = "blue";">' +
+                                                    logfilename +
+                                                    '</div>\n<br>\n')
 
-                        tmpList.append('<p>&nbsp;</p>')
+                        tmplist.append('<p>&nbsp;</p>')
 
-                        self.allErrorsList.extend(log_severity_list)
-                        self.allErrorsList.extend(log_alert_list)
-                        self.allErrorsList.append('<div><br>\n' +
-                                                  '<div id="detail' + logfile_number + '" style="display:none;">\n' +
-                                                  '<p>' + logfile_link + '</p>' +
-                                                  '\n<div>\n')
-                        self.allErrorsList.extend(tmpList)
-                        self.allErrorsList.append('<hr>\n')
-                        self.allErrorsList.append('</div></div></div>\n\n')
+                        self.all_errors_list.extend(log_severity_list)
+                        self.all_errors_list.extend(log_alert_list)
+                        self.all_errors_list.append('<div><br>\n' +
+                                                    '<div id="detail' + logfile_number + '" style="display:none;">\n' +
+                                                    '<p>' + logfile_link + '</p>' +
+                                                    '\n<div>\n')
+                        self.all_errors_list.extend(tmplist)
+                        self.all_errors_list.append('<hr>\n')
+                        self.all_errors_list.append('</div></div></div>\n\n')
 
-                    # if len(self.allErrorsList) == 0:
-                    #                    self.allErrorsList.append('<h3>AnaLog found no issues!</h3>\n')
+                        # if len(self.allErrorsList) == 0:
+                        # self.allErrorsList.append('<h3>AnaLog found no issues!</h3>\n')
 
             logfile_counter += 1
 
-        reportname = self.gwFlavour + '_' + self.gwIP
-        self.createReport(reportname)
+        reportname = self.gw_flavour + '_' + self.gw_ip
+        self.create_report(reportname)
 
-    def createReport(self, reportName):
-        '''Write results and HTML footer to report list'''
+    def create_report(self, reportname):
+        """Write results and HTML footer to report list"""
         daylight = 'CST' if time.localtime()[-1] == 0 else 'CDT'
-        currTime = str(time.asctime())
-        self.allErrorsList.append('<p><dd><dd><font color=\"gray\" size=1>Log results provided by AnaLog.py')
-        self.allErrorsList.append('<dd><dd>Report Create Time = ' + (' '.join([currTime, daylight])) + '</font></p>')
-        self.allErrorsList.append('\n\n</font></body></html>')
+        currtime = str(time.asctime())
+        self.all_errors_list.append('<p><dd><dd><font color=\"gray\" size=1>Log results provided by AnaLog.py')
+        self.all_errors_list.append('<dd><dd>Report Create Time = ' + (' '.join([currtime, daylight])) + '</font></p>')
+        self.all_errors_list.append('\n\n</font></body></html>')
 
-        reportFile = self.cwd + '\\' + reportName + '_' + str(time.time()).split('.')[-2] + '.html'
-        f = file(reportFile, 'w')
-        for error in self.allErrorsList:
+        reportfile = self.cwd + '\\' + reportname + '_' + str(time.time()).split('.')[-2] + '.html'
+        f = file(reportfile, 'w')
+        for error in self.all_errors_list:
             f.write(error)
         f.close()
 
-        formatted_reportFile = ((reportFile.lstrip(self.cwd)).replace('_', ' ')).replace('.html', '')
+        formatted_reportfile = ((reportfile.lstrip(self.cwd)).replace('_', ' ')).replace('.html', '')
         f = file(self.today_file, 'a')
         f.write('<h3 style="font-family: Arial; text-align:center;"><a href=\"' +
-                reportFile.replace(self.cwd + '\\', 'http://10.31.60.183:8080/') + '\">' +
-                formatted_reportFile + '</a></h3>\n')
+                reportfile.replace(self.cwd + '\\', 'http://10.31.60.183:8080/') + '\">' +
+                formatted_reportfile + '</a></h3>\n')
         f.close()
 
-        self.allErrorsList = []
+        self.all_errors_list = []
 
-    def cleanUp(self):
-        '''Clean up and archive data.'''
-        try:
-            os.makedirs(self.archiveDir)
-        except:
-            pass
-        print 'Archiving data to \"%s\".' % (self.archiveDir.split('\\')[-1])
+    def cleanup(self):
+        """Clean up and archive data."""
+        if not os.path.exists(self.archivedir):
+            os.makedirs(self.archivedir)
+        print 'Archiving data to \"%s\".' % (self.archivedir.split('\\')[-1])
         for item in os.listdir(self.cwd):
             if 'archive_' in item:
                 pass
             elif '.html' in str(item):
                 pass
             else:
-                try:
-                    os.makedirs(self.archiveDir + '\\' + item)
-                    for file_for_archiving in os.listdir(self.cwd + '\\' + item):
-                        shutil.move(self.cwd + '\\' + item + '\\' + file_for_archiving, self.archiveDir + '\\' + item)
-                    os.removedirs(self.cwd + '\\' + item)
-                except:
-                    pass
+                if not os.path.exists(self.archivedir + '\\' + item):
+                    os.makedirs(self.archivedir + '\\' + item)
+                for file_for_archiving in os.listdir(self.cwd + '\\' + item):
+                    shutil.move(self.cwd + '\\' + item + '\\' + file_for_archiving, self.archivedir + '\\' + item)
+                os.removedirs(self.cwd + '\\' + item)
 
         # remove temporary unzip directory
-        shutil.rmtree(self.sourceLogPath)
+        shutil.rmtree(self.source_log_path)
 
-    def postToServer(self):
-        # Send report files to the webserver.
+    def post_to_server(self):
+        """Send report files to the web server."""
         item_list = []
         print 'Posting Gateway Log Report to the server.'
         for item in os.listdir(self.cwd):
@@ -487,11 +501,12 @@ class AnaLog():
             else:
                 item_list.append(item)
                 shutil.copy(self.cwd + '\\' + item, self.log_results_dir)
-                shutil.move(self.cwd + '\\' + item, self.archiveDir)
+                shutil.move(self.cwd + '\\' + item, self.archivedir)
         time.sleep(5)
         self.update_google_group(item_list)
 
     def update_google_group(self, item_list):
+        """Generate an email summarizing the AnaLog run and post it to the AnaLog Google Group"""
         html_file_name = self.today_file.split('\\')[-1]
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
@@ -505,7 +520,7 @@ class AnaLog():
                       'http://10.31.60.183:8080/',
                       html_file_name,
                       '<br><br>'
-                      'NOTE: If you need to visit this link later and you\'re prompted to login,'
+                      'NOTE: If you need to visit this link later and you\'re prompted to login, '
                       'please use Administrator 12345678.'
                       '<br><br>']
 
@@ -526,34 +541,34 @@ class AnaLog():
         server.sendmail(sender, recipient, msg.as_string())
         server.quit()
 
-    def run_anaLog(self):
-        zipFileCount = 1
+    def run_analog(self):
+        zipfile_count = 1
         if self.get_user_logon_creds():
             self.setup_class()
             self.grab_original_zip_files()
-            ziplistcount = self.get_log_zips()
+            zip_list_count = self.get_log_zips()
             zip_list_generator = self.list_of_zips()
-            while zipFileCount <= ziplistcount:
+            while zipfile_count <= zip_list_count:
                 try:
-                    currentzipfile = zip_list_generator.next()
-                    self.log_unzip(currentzipfile)
+                    current_zipfile = zip_list_generator.next()
+                    self.log_unzip(current_zipfile)
                     self.get_logfile_info()
-                    self.file_handler(currentzipfile)
+                    self.file_handler(current_zipfile)
                     self.init_errors_list()
                     self.get_minidump_data()
                     self.get_logfiles()
                     self.check_logfile()
-                    zipFileCount += 1
+                    zipfile_count += 1
                 except:
                     print 'ERROR! Unable to continue Analysing logfile zip %s; \
-                    moving on to next Zip file.' % currentzipfile
-                    zipFileCount += 1
-            self.cleanUp()
-            self.postToServer()
+                    moving on to next Zip file.' % current_zipfile
+                    zipfile_count += 1
+            # self.cleanup()
+            # self.post_to_server()
         else:
             print 'ERROR! It seems like I was unable to login to the server.'
 
 
 if __name__ == "__main__":
     AnaLog = AnaLog()
-    AnaLog.run_anaLog()
+    AnaLog.run_analog()
