@@ -4,7 +4,7 @@ from Timestamp import getDateStamp
 log_results_dir = r'\\10.31.60.183\c$\AnaLog'
 index_html = log_results_dir + '\\' + 'index.html'
 today_file = log_results_dir + '\\' + getDateStamp() + '_Logfiles.html'
-hyperlink_path = r'file://///10.31.60.183/c$/AnaLog/'
+hyperlink_path = r'file://///10.31.60.183/AnaLog/'
 
 def catalog_by_date():
     if not os.path.exists(today_file):

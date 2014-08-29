@@ -44,7 +44,7 @@ class AnaLog():
         self.destdir = None
         self.archivedir = r'\\10.31.60.183\c$\log_archives' + '\\' + 'archive_' + getDateStamp() + '_' + getTimeStamp()
         self.log_results_dir = r'\\10.31.60.183\c$\AnaLog'
-        self.hyperlink_path = r'file://///10.31.60.183/c$/log_archives/archive_' + \
+        self.hyperlink_path = r'file://///10.31.60.183/log_archives/archive_' + \
                               getDateStamp() + '_' + getTimeStamp() + '/'
         self.today_file = catalog_by_date()
 
@@ -563,8 +563,8 @@ class AnaLog():
                     print 'ERROR! Unable to continue Analysing logfile zip %s; \
                     moving on to next Zip file.' % current_zipfile
                     zipfile_count += 1
-            # self.cleanup()
-            # self.post_to_server()
+            self.cleanup()
+            self.post_to_server()
         else:
             print 'ERROR! It seems like I was unable to login to the server.'
 
