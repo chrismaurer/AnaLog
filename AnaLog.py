@@ -170,7 +170,7 @@ class AnaLog():
 
                         if current_logfile is not None:
                             current_logfile_size = os.path.getsize(current_logfile)
-                            if current_logfile_size > 194615705:
+                            if current_logfile_size > 1937768448:
                                 current_logfile_size_list = list(str(current_logfile_size / (1024 ** 2)))
                                 print 'WARNING! The size of %s is %s.%s GB! AnaLog will skip this file.' % \
                                       (fileName, current_logfile_size_list[0], ''.join(current_logfile_size_list[1:]))
