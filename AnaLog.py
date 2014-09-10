@@ -57,16 +57,6 @@ class AnaLog():
         if not os.path.exists(self.source_log_path):
             os.mkdir(self.source_log_path)
 
-    @staticmethod
-    def get_user_logon_creds():
-        """Login to the AnaLog Web Server"""
-        netusecmd = r'net use \\10.31.60.183\c$ /user:10.31.60.183\Administrator 12345678'
-        login_response = subprocess.Popen(netusecmd, stdout=subprocess.PIPE).communicate()
-        if 'The command completed successfully' in str(login_response):
-            return True
-        else:
-            return False
-
     def grab_original_zip_files(self):
         """Get path to the original ZIP files and copy them to local PC"""
         filename = r'C:\temp\AnaLog.ini'
@@ -543,7 +533,9 @@ class AnaLog():
 
     def run_analog(self):
         zipfile_count = 1
-        if self.get_user_logon_creds():
+        if not self.today_file:
+            print 'ERROR! It seems like I was unable to login to the server.'
+        else:
             self.setup_class()
             self.grab_original_zip_files()
             zip_list_count = self.get_log_zips()
@@ -565,8 +557,6 @@ class AnaLog():
                     zipfile_count += 1
             self.cleanup()
             self.post_to_server()
-        else:
-            print 'ERROR! It seems like I was unable to login to the server.'
 
 
 if __name__ == "__main__":
