@@ -11,7 +11,6 @@ import time
 import logging
 import shutil
 import zipfile
-import subprocess
 import getpass
 import re
 import smtplib
@@ -184,7 +183,7 @@ class AnaLog():
         shutil.rmtree(self.tempdir)
 
     def init_errors_list(self):
-        """Initialise allErrorsList and create HTML file header and doc heading."""
+        """Initialise all_errors_list and create HTML file header and doc heading."""
         self.all_errors_list = []
         gwversion, pfxenabled, tokenenabled = self.gw_version, self.pfx_enabled, self.token_enabled
         if gwversion is None:
@@ -262,6 +261,7 @@ class AnaLog():
             if log_entry_from_today:
                 if 'Not A Crash' in line:
                     return True
+        minidumplog.close()
         return False
 
     def get_minidump_data(self):
@@ -430,8 +430,7 @@ class AnaLog():
                         self.all_errors_list.append('<hr>\n')
                         self.all_errors_list.append('</div></div></div>\n\n')
 
-                        # if len(self.allErrorsList) == 0:
-                        # self.allErrorsList.append('<h3>AnaLog found no issues!</h3>\n')
+                    logfile_being_checked.close()
 
             logfile_counter += 1
 
@@ -440,6 +439,9 @@ class AnaLog():
 
     def create_report(self, reportname):
         """Write results and HTML footer to report list"""
+        # if not any(error_message in str(self.all_errors_list) for error_message in ['WARNING', 'ERROR', 'CRITICAL']):
+        #     self.all_errors_list.append('<h3>AnaLog found no issues!</h3>\n')
+
         daylight = 'CST' if time.localtime()[-1] == 0 else 'CDT'
         currtime = str(time.asctime())
         self.all_errors_list.append('<p><dd><dd><font color=\"gray\" size=1>Log results provided by AnaLog.py')
@@ -466,7 +468,8 @@ class AnaLog():
         if not os.path.exists(self.archivedir):
             os.makedirs(self.archivedir)
         print 'Archiving data to \"%s\".' % (self.archivedir.split('\\')[-1])
-        for item in os.listdir(self.cwd):
+        cwd_list = os.listdir(self.cwd)
+        for item in cwd_list:
             if 'archive_' in item:
                 pass
             elif '.html' in str(item):
@@ -485,6 +488,7 @@ class AnaLog():
         """Send report files to the web server."""
         item_list = []
         print 'Posting Gateway Log Report to the server.'
+        time.sleep(10)
         for item in os.listdir(self.cwd):
             if '.html' not in item:
                 pass
@@ -552,8 +556,8 @@ class AnaLog():
                     self.check_logfile()
                     zipfile_count += 1
                 except:
-                    print 'ERROR! Unable to continue Analysing logfile zip %s; \
-                    moving on to next Zip file.' % current_zipfile
+                    print '\nERROR! Unable to continue Analysing logfile zip %s;' % current_zipfile
+                    print 'moving on to next Zip file.\n'
                     zipfile_count += 1
             self.cleanup()
             self.post_to_server()
