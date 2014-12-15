@@ -21,7 +21,6 @@ from htmlHandler import catalog_by_date
 
 log = logging.getLogger(__name__)
 
-
 class AnaLog():
     def __init__(self):
         self.all_errors_list = []
