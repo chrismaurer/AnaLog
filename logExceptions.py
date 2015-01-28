@@ -247,7 +247,9 @@ def om_exceptions():
         # Ignore "Failed to handle login request due to it being an invalid connection" messages
         re.compile(r'.*Failed to handle login request due to it being an invalid connection.*', re.I),
         # Ignore "Could not download one-sided orders" messages
-        re.compile(r'.*Could not download one-sided orders.*', re.I)
+        re.compile(r'.*Could not download one-sided orders.*', re.I),
+        # Ignore "Instrument <product> is now in state..." messages
+        re.compile(r'.*10013120.*', re.I)
     ]
     return _om_exceptions
 

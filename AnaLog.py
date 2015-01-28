@@ -487,7 +487,6 @@ class AnaLog():
         """Send report files to the web server."""
         item_list = []
         print 'Posting Gateway Log Report to the server.'
-        time.sleep(10)
         for item in os.listdir(self.cwd):
             if '.html' not in item:
                 pass
