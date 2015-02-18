@@ -162,7 +162,13 @@ def logexceptions(gw_flavour):
         # Ignore "10118737 | PGM receive socket <ip_addr>: max pending bytes in last minute: n"
         re.compile(r'.*max pending bytes in last minute.*', re.I),
         # Ignore "**INVALID CLASS NAME**"
-        re.compile(r'.*INVALID CLASS NAME.*', re.I)
+        re.compile(r'.*INVALID CLASS NAME.*', re.I),
+        # Ignore "Updating TT_SETTLE_PRC"
+        re.compile(r'.*10002563.*', re.I),
+        # Ignore "Added combination series"
+        re.compile(r'.*10013147.*', re.I),
+        # Ignore "No License for request n trnCode n client at ip"
+        re.compile(r'.*No License for request.*trnCode.*client at.*', re.I)
     ]
     if any(gwFlavourName in gw_flavour for gwFlavourName in ['SGX', 'TOCOM', 'OSE', 'HKEx']):
         _logexceptions.extend(om_exceptions())

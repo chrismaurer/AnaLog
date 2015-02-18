@@ -24,7 +24,7 @@ def catalog_by_date():
             datefile.write('<html>\n<head></head>\n<body>\n')
             datefile.write('<center><img src=TT_horizontal_2lines_4c_logo.png></center>\n')
             datefile.write('<h1 style="font-family: Arial; text-align:center; color: white; background-color: #0099CC;">AnaLog Results from ' + getDateStamp() + '</h1>\n')
-            datefile.write('<p style="font-family: Arial; text-align:center;"><a href="http://10.31.60.183:8080/">[BACK]</a></p>\n')
+            datefile.write('<p style="font-family: Arial; text-align:center;"><a href="http://10.31.60.183/">[BACK]</a></p>\n')
             datefile.close()
 
     return today_file

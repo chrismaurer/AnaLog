@@ -456,7 +456,7 @@ class AnaLog():
         formatted_reportfile = ((reportfile.lstrip(self.cwd)).replace('_', ' ')).replace('.html', '')
         f = file(self.today_file, 'a')
         f.write('<h3 style="font-family: Arial; text-align:center;"><a href=\"' +
-                reportfile.replace(self.cwd + '\\', 'http://10.31.60.183:8080/') + '\">' +
+                reportfile.replace(self.cwd + '\\', 'http://10.31.60.183/') + '\">' +
                 formatted_reportfile + '</a></h3>\n')
         f.close()
 
@@ -509,7 +509,7 @@ class AnaLog():
         text_block = ['\nThe following logfile reports requested by ',
                       getpass.getuser(),
                       ' are now ready and have been posted here: ',
-                      'http://10.31.60.183:8080/',
+                      'http://10.31.60.183/',
                       html_file_name,
                       '<br><br>'
                       'NOTE: If you need to visit this link later and you\'re prompted to login, '
